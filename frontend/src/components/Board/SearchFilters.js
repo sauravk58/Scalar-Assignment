@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useEffect } from "react"
 import { Search, Filter, X, User, Tag, Calendar } from "lucide-react"
 import Button from "../UI/Button"
@@ -10,7 +8,7 @@ const SearchFilters = ({ onFiltersChange, boardMembers = [], availableLabels = [
     search: "",
     assignees: [],
     labels: [],
-    dueDate: "", // overdue, today, week, month
+    dueDate: "",
     hasDescription: false,
     hasComments: false,
   })
@@ -57,11 +55,14 @@ const SearchFilters = ({ onFiltersChange, boardMembers = [], availableLabels = [
     filters.hasComments
 
   return (
-    <div className="relative">
+    <div className="relative bg-white border-b border-gray-200 p-4">
       {/* Search Bar */}
       <div className="flex items-center space-x-2 mb-4">
         <div className="relative flex-1">
-          <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+          <Search
+            size={16}
+            className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+          />
           <input
             type="text"
             placeholder="Search cards..."
@@ -73,7 +74,9 @@ const SearchFilters = ({ onFiltersChange, boardMembers = [], availableLabels = [
         <Button
           variant="outline"
           onClick={() => setIsOpen(!isOpen)}
-          className={`flex items-center space-x-2 ${hasActiveFilters ? "bg-blue-50 border-blue-300" : ""}`}
+          className={`flex items-center space-x-2 ${
+            hasActiveFilters ? "bg-blue-50 border-blue-300" : ""
+          }`}
         >
           <Filter size={16} />
           <span>Filters</span>
@@ -103,12 +106,16 @@ const SearchFilters = ({ onFiltersChange, boardMembers = [], availableLabels = [
               >
                 <User size={12} className="mr-1" />
                 {member?.name || "Unknown"}
-                <button onClick={() => toggleAssignee(userId)} className="ml-1 hover:text-blue-600">
+                <button
+                  onClick={() => toggleAssignee(userId)}
+                  className="ml-1 hover:text-blue-600"
+                >
                   <X size={12} />
                 </button>
               </span>
             )
           })}
+          
           {filters.labels.map((labelId) => {
             const label = availableLabels.find((l) => l._id === labelId)
             return (
@@ -119,22 +126,33 @@ const SearchFilters = ({ onFiltersChange, boardMembers = [], availableLabels = [
               >
                 <Tag size={12} className="mr-1" />
                 {label?.name || "Unknown"}
-                <button onClick={() => toggleLabel(labelId)} className="ml-1 hover:opacity-80">
+                <button
+                  onClick={() => toggleLabel(labelId)}
+                  className="ml-1 hover:opacity-80"
+                >
                   <X size={12} />
                 </button>
               </span>
             )
           })}
+          
           {filters.dueDate && (
             <span className="inline-flex items-center px-2 py-1 bg-orange-100 text-orange-800 text-xs rounded-full">
               <Calendar size={12} className="mr-1" />
               {filters.dueDate}
-              <button onClick={() => setFilters({ ...filters, dueDate: "" })} className="ml-1 hover:text-orange-600">
+              <button
+                onClick={() => setFilters({ ...filters, dueDate: "" })}
+                className="ml-1 hover:text-orange-600"
+              >
                 <X size={12} />
               </button>
             </span>
           )}
-          <button onClick={clearFilters} className="text-xs text-gray-500 hover:text-gray-700 underline">
+          
+          <button
+            onClick={clearFilters}
+            className="text-xs text-gray-500 hover:text-gray-700 underline"
+          >
             Clear all
           </button>
         </div>
@@ -162,29 +180,6 @@ const SearchFilters = ({ onFiltersChange, boardMembers = [], availableLabels = [
                           <User size={12} className="text-gray-600" />
                         </div>
                         <span className="text-sm text-gray-700">{member.name}</span>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Labels */}
-            {availableLabels.length > 0 && (
-              <div>
-                <h4 className="text-sm font-medium text-gray-900 mb-2">Labels</h4>
-                <div className="space-y-1">
-                  {availableLabels.map((label) => (
-                    <label key={label._id} className="flex items-center space-x-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={filters.labels.includes(label._id)}
-                        onChange={() => toggleLabel(label._id)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <div className="flex items-center space-x-2">
-                        <div className="w-4 h-4 rounded" style={{ backgroundColor: label.color }} />
-                        <span className="text-sm text-gray-700">{label.name}</span>
                       </div>
                     </label>
                   ))}
@@ -245,7 +240,10 @@ const SearchFilters = ({ onFiltersChange, boardMembers = [], availableLabels = [
 
           {/* Footer */}
           <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-200">
-            <button onClick={clearFilters} className="text-sm text-gray-500 hover:text-gray-700">
+            <button
+              onClick={clearFilters}
+              className="text-sm text-gray-500 hover:text-gray-700"
+            >
               Clear all
             </button>
             <Button onClick={() => setIsOpen(false)} size="sm">

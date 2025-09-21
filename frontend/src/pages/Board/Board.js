@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useParams } from "react-router-dom"
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd"
 import axios from "axios"
@@ -21,6 +21,7 @@ const Board = () => {
   const [board, setBoard] = useState(null)
   const [lists, setLists] = useState([])
   const [loading, setLoading] = useState(true)
+  const [isDragging, setIsDragging] = useState(false)
   const [selectedCard, setSelectedCard] = useState(null)
   const [showCreateList, setShowCreateList] = useState(false)
   const [showActivitySidebar, setShowActivitySidebar] = useState(false)
@@ -37,15 +38,109 @@ const Board = () => {
   // Get API URL
   const apiUrl = process.env.REACT_APP_BACKEND_API_URL || "http://localhost:4000"
 
+  // Memoize filtered and validated lists
+  const validatedLists = useMemo(() => {
+    return lists
+      .filter(list => list && list._id && typeof list._id === 'string')
+      .map(list => ({
+        ...list,
+        _id: String(list._id),
+        cards: (list.cards || [])
+          .filter(card => card && card._id && typeof card._id === 'string')
+          .map(card => ({
+            ...card,
+            _id: String(card._id)
+          }))
+          .sort((a, b) => (a.position || 0) - (b.position || 0))
+      }))
+      .sort((a, b) => (a.position || 0) - (b.position || 0))
+  }, [lists])
+
+  const fetchBoard = useCallback(async () => {
+    try {
+      setLoading(true)
+      const token = localStorage.getItem("token")
+      
+      console.log("Fetching board:", boardId)
+      console.log("API URL:", `${apiUrl}/api/boards/${boardId}`)
+      
+      const response = await axios.get(`${apiUrl}/api/boards/${boardId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      
+      console.log("Board response:", response.data)
+      setBoard(response.data)
+
+      // Validate and process lists
+      const boardLists = response.data.lists || []
+      const validLists = boardLists.filter(list => {
+        if (!list || !list._id) {
+          console.warn('Invalid list found:', list)
+          return false
+        }
+        return true
+      })
+
+      // Sort lists by position and ensure cards are sorted
+      const sortedLists = validLists
+        .map(list => ({
+          ...list,
+          _id: String(list._id),
+          cards: (list.cards || [])
+            .filter(card => {
+              if (!card || !card._id) {
+                console.warn('Invalid card found:', card)
+                return false
+              }
+              return true
+            })
+            .map(card => ({
+              ...card,
+              _id: String(card._id)
+            }))
+            .sort((a, b) => (a.position || 0) - (b.position || 0))
+        }))
+        .sort((a, b) => (a.position || 0) - (b.position || 0))
+
+      console.log("Processing lists:", sortedLists.length)
+      sortedLists.forEach((list, index) => {
+        console.log(`List ${index}: ${list.title} (${list._id}) - ${list.cards?.length || 0} cards`)
+      })
+
+      setLists(sortedLists)
+    } catch (error) {
+      console.error("Error fetching board:", error)
+      console.error("Error details:", {
+        status: error.response?.status,
+        message: error.response?.data?.message,
+        url: error.config?.url
+      })
+      
+      if (error.response?.status === 404) {
+        toast.error("Board not found")
+      } else if (error.response?.status === 403) {
+        toast.error("Access denied to this board")
+      } else {
+        toast.error("Failed to load board")
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [boardId, apiUrl])
+
   useEffect(() => {
-    fetchBoard()
+    if (boardId) {
+      fetchBoard()
+    }
 
     return () => {
       if (boardId) {
         leaveBoard(boardId)
       }
     }
-  }, [boardId])
+  }, [boardId, fetchBoard, leaveBoard])
 
   useEffect(() => {
     if (board && socket) {
@@ -70,56 +165,10 @@ const Board = () => {
         socket.off("comment-added", handleCommentAddedEvent)
       }
     }
-  }, [board, socket])
-
-  const fetchBoard = async () => {
-    try {
-      const token = localStorage.getItem("token")
-      
-      console.log("Fetching board:", boardId)
-      console.log("API URL:", `${apiUrl}/api/boards/${boardId}`)
-      
-      const response = await axios.get(`${apiUrl}/api/boards/${boardId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-      
-      console.log("Board response:", response.data)
-      setBoard(response.data)
-
-      // Sort lists by position
-      const sortedLists = response.data.lists.sort((a, b) => a.position - b.position)
-
-      // Sort cards within each list by position
-      const listsWithSortedCards = sortedLists.map((list) => ({
-        ...list,
-        cards: list.cards.sort((a, b) => a.position - b.position),
-      }))
-
-      setLists(listsWithSortedCards)
-    } catch (error) {
-      console.error("Error fetching board:", error)
-      console.error("Error details:", {
-        status: error.response?.status,
-        message: error.response?.data?.message,
-        url: error.config?.url
-      })
-      
-      if (error.response?.status === 404) {
-        toast.error("Board not found")
-      } else if (error.response?.status === 403) {
-        toast.error("Access denied to this board")
-      } else {
-        toast.error("Failed to load board")
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
+  }, [board, socket, boardId, joinBoard])
 
   // Real-time event handlers
-  const handleCardMovedEvent = (data) => {
+  const handleCardMovedEvent = useCallback((data) => {
     if (data.userId === socket?.id) return // Ignore own events
 
     setLists((prevLists) => {
@@ -154,9 +203,9 @@ const Board = () => {
     })
 
     toast.success(`${data.userName} moved a card`)
-  }
+  }, [socket])
 
-  const handleCardCreatedEvent = (data) => {
+  const handleCardCreatedEvent = useCallback((data) => {
     if (data.userId === socket?.id) return
 
     setLists((prevLists) => {
@@ -164,17 +213,21 @@ const Board = () => {
       const listIndex = newLists.findIndex((list) => list._id === data.card.list)
 
       if (listIndex !== -1) {
-        newLists[listIndex].cards.push(data.card)
-        newLists[listIndex].cards.sort((a, b) => a.position - b.position)
+        const cardWithStringId = {
+          ...data.card,
+          _id: String(data.card._id)
+        }
+        newLists[listIndex].cards.push(cardWithStringId)
+        newLists[listIndex].cards.sort((a, b) => (a.position || 0) - (b.position || 0))
       }
 
       return newLists
     })
 
     toast.success(`${data.userName} added a new card`)
-  }
+  }, [socket])
 
-  const handleCardUpdatedEvent = (data) => {
+  const handleCardUpdatedEvent = useCallback((data) => {
     if (data.userId === socket?.id) return
 
     setLists((prevLists) => {
@@ -190,20 +243,25 @@ const Board = () => {
 
       return newLists
     })
-  }
+  }, [socket])
 
-  const handleListCreatedEvent = (data) => {
+  const handleListCreatedEvent = useCallback((data) => {
     if (data.userId === socket?.id) return
 
     setLists((prevLists) => {
-      const newLists = [...prevLists, { ...data.list, cards: [] }]
-      return newLists.sort((a, b) => a.position - b.position)
+      const listWithStringId = {
+        ...data.list,
+        _id: String(data.list._id),
+        cards: []
+      }
+      const newLists = [...prevLists, listWithStringId]
+      return newLists.sort((a, b) => (a.position || 0) - (b.position || 0))
     })
 
     toast.success(`${data.userName} added a new list`)
-  }
+  }, [socket])
 
-  const handleListUpdatedEvent = (data) => {
+  const handleListUpdatedEvent = useCallback((data) => {
     if (data.userId === socket?.id) return
 
     setLists((prevLists) => {
@@ -216,9 +274,9 @@ const Board = () => {
 
       return newLists
     })
-  }
+  }, [socket])
 
-  const handleListMovedEvent = (data) => {
+  const handleListMovedEvent = useCallback((data) => {
     if (data.userId === socket?.id) return
 
     setLists((prevLists) => {
@@ -227,14 +285,14 @@ const Board = () => {
 
       if (listIndex !== -1) {
         newLists[listIndex].position = data.newPosition
-        return newLists.sort((a, b) => a.position - b.position)
+        return newLists.sort((a, b) => (a.position || 0) - (b.position || 0))
       }
 
       return prevLists
     })
-  }
+  }, [socket])
 
-  const handleCommentAddedEvent = (data) => {
+  const handleCommentAddedEvent = useCallback((data) => {
     if (data.userId === socket?.id) return
 
     // Update card if it's currently selected
@@ -244,21 +302,49 @@ const Board = () => {
         comments: [...(prev.comments || []), data.comment],
       }))
     }
-  }
+  }, [socket, selectedCard])
 
   // Drag and drop handlers
-  const onDragEnd = async (result) => {
+  const onDragStart = useCallback(() => {
+    setIsDragging(true)
+  }, [])
+
+  const onDragEnd = useCallback(async (result) => {
+    setIsDragging(false)
+    
     const { destination, source, draggableId, type } = result
 
-    if (!destination) return
+    // Early return if no destination or same position
+    if (!destination || 
+        (destination.droppableId === source.droppableId && destination.index === source.index)) {
+      return
+    }
 
-    if (destination.droppableId === source.droppableId && destination.index === source.index) {
+    // Validate draggableId
+    if (!draggableId || typeof draggableId !== 'string') {
+      console.error('Invalid draggableId:', draggableId)
+      return
+    }
+
+    // Validate that source and destination lists still exist
+    const sourceExists = validatedLists.find(list => list._id === source.droppableId)
+    const destExists = validatedLists.find(list => list._id === destination.droppableId)
+
+    if (!sourceExists || !destExists) {
+      console.error('Source or destination list not found:', {
+        sourceId: source.droppableId,
+        destId: destination.droppableId,
+        sourceExists: !!sourceExists,
+        destExists: !!destExists
+      })
+      toast.error('List not found. Refreshing board...')
+      fetchBoard()
       return
     }
 
     if (type === "list") {
       // Handle list reordering
-      const newLists = Array.from(lists)
+      const newLists = Array.from(validatedLists)
       const [reorderedList] = newLists.splice(source.index, 1)
       newLists.splice(destination.index, 0, reorderedList)
 
@@ -301,12 +387,22 @@ const Board = () => {
     }
 
     // Handle card movement
-    const sourceList = lists.find((list) => list._id === source.droppableId)
-    const destList = lists.find((list) => list._id === destination.droppableId)
+    const sourceList = validatedLists.find((list) => list._id === source.droppableId)
+    const destList = validatedLists.find((list) => list._id === destination.droppableId)
 
-    if (!sourceList || !destList) return
+    if (!sourceList || !destList) {
+      console.error('Source or destination list not found for card move')
+      return
+    }
 
     const sourceCards = Array.from(sourceList.cards)
+    const cardToMove = sourceCards.find(card => card._id === draggableId)
+    
+    if (!cardToMove) {
+      console.error('Card to move not found:', draggableId)
+      return
+    }
+
     const [movedCard] = sourceCards.splice(source.index, 1)
 
     if (source.droppableId === destination.droppableId) {
@@ -414,33 +510,44 @@ const Board = () => {
         fetchBoard() // Refresh on error
       }
     }
-  }
+  }, [validatedLists, lists, emitListMoved, emitCardMoved, boardId, apiUrl, fetchBoard])
 
-  const handleCardClick = (card) => {
-    setSelectedCard(card)
-  }
+  const handleCardClick = useCallback((card) => {
+    if (!isDragging) {
+      setSelectedCard(card)
+    }
+  }, [isDragging])
 
-  const handleCardCreated = (newCard) => {
+  const handleCardCreated = useCallback((newCard) => {
     setLists((prevLists) => {
       const newLists = [...prevLists]
       const listIndex = newLists.findIndex((list) => list._id === newCard.list)
 
       if (listIndex !== -1) {
-        newLists[listIndex].cards.push(newCard)
-        newLists[listIndex].cards.sort((a, b) => a.position - b.position)
+        const cardWithStringId = {
+          ...newCard,
+          _id: String(newCard._id)
+        }
+        newLists[listIndex].cards.push(cardWithStringId)
+        newLists[listIndex].cards.sort((a, b) => (a.position || 0) - (b.position || 0))
       }
 
       return newLists
     })
-  }
+  }, [])
 
-  const handleListCreated = (newList) => {
+  const handleListCreated = useCallback((newList) => {
     setLists((prevLists) => {
-      const newLists = [...prevLists, { ...newList, cards: [] }]
-      return newLists.sort((a, b) => a.position - b.position)
+      const listWithStringId = {
+        ...newList,
+        _id: String(newList._id),
+        cards: []
+      }
+      const newLists = [...prevLists, listWithStringId]
+      return newLists.sort((a, b) => (a.position || 0) - (b.position || 0))
     })
     setShowCreateList(false)
-  }
+  }, [])
 
   if (loading) {
     return <LoadingSpinner text="Loading board..." />
@@ -483,17 +590,33 @@ const Board = () => {
           className="flex-1 overflow-x-auto overflow-y-hidden p-4"
           style={{ backgroundColor: board.background || "#0079bf" }}
         >
-          <DragDropContext onDragEnd={onDragEnd}>
-            <Droppable droppableId="board" type="list" direction="horizontal">
-              {(provided) => (
-                <div {...provided.droppableProps} ref={provided.innerRef} className="flex space-x-4 h-full min-w-max">
-                  {lists.map((list, index) => (
-                    <Draggable key={list._id} draggableId={list._id} index={index}>
+          <DragDropContext onDragEnd={onDragEnd} onDragStart={onDragStart}>
+            <Droppable 
+              droppableId="board" 
+              type="list" 
+              direction="horizontal"
+              isDropDisabled={false}
+            >
+              {(provided, snapshot) => (
+                <div 
+                  {...provided.droppableProps} 
+                  ref={provided.innerRef} 
+                  className={`flex space-x-4 h-full min-w-max ${
+                    snapshot.isDraggingOver ? 'bg-black bg-opacity-10' : ''
+                  }`}
+                >
+                  {validatedLists.map((list, index) => (
+                    <Draggable 
+                      key={list._id} 
+                      draggableId={list._id} 
+                      index={index}
+                      isDragDisabled={false}
+                    >
                       {(provided, snapshot) => (
                         <div
                           ref={provided.innerRef}
                           {...provided.draggableProps}
-                          className={`${snapshot.isDragging ? "transform rotate-2" : ""}`}
+                          className={`${snapshot.isDragging ? "transform rotate-2 shadow-2xl" : ""}`}
                         >
                           <KanbanList
                             list={list}
@@ -514,6 +637,7 @@ const Board = () => {
                       onClick={() => setShowCreateList(true)}
                       variant="ghost"
                       className="w-72 h-12 bg-white bg-opacity-20 text-white hover:bg-opacity-30 border-2 border-dashed border-white border-opacity-50"
+                      disabled={isDragging}
                     >
                       <Plus size={16} className="mr-2" />
                       Add another list

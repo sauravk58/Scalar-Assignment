@@ -8,6 +8,45 @@ const auth = require("../middleware/auth")
 
 const router = express.Router()
 
+// Get lists for a board
+router.get("/board/:boardId", auth, async (req, res) => {
+  try {
+    const board = await Board.findById(req.params.boardId)
+    if (!board) {
+      return res.status(404).json({ message: "Board not found" })
+    }
+
+    // Check access
+    const isMember =
+      board.owner.toString() === req.user.id ||
+      board.members.some((member) => member.user.toString() === req.user.id)
+
+    if (!isMember && board.visibility === "private") {
+      return res.status(403).json({ message: "Access denied" })
+    }
+
+    const lists = await List.find({
+      board: req.params.boardId,
+      archived: false,
+    })
+      .populate({
+        path: "cards",
+        match: { archived: false },
+        populate: [
+          { path: "assignees", select: "name email avatar" },
+          { path: "creator", select: "name email avatar" },
+          { path: "comments" },
+        ],
+      })
+      .sort({ position: 1 })
+
+    res.json(lists)
+  } catch (error) {
+    console.error("Get lists error:", error)
+    res.status(500).json({ message: "Server error" })
+  }
+})
+
 // Create list
 router.post(
   "/",
@@ -28,14 +67,15 @@ router.post(
 
       const { title, boardId, position } = req.body
 
-      // Check if user has access to board
       const board = await Board.findById(boardId)
       if (!board) {
         return res.status(404).json({ message: "Board not found" })
       }
 
+      // Check access
       const isMember =
-        board.owner.toString() === req.user.id || board.members.some((member) => member.user.toString() === req.user.id)
+        board.owner.toString() === req.user.id ||
+        board.members.some((member) => member.user.toString() === req.user.id)
 
       if (!isMember) {
         return res.status(403).json({ message: "Access denied" })
@@ -44,7 +84,9 @@ router.post(
       // Calculate position if not provided
       let listPosition = position
       if (!listPosition) {
-        const lastList = await List.findOne({ board: boardId }).sort({ position: -1 })
+        const lastList = await List.findOne({ board: boardId }).sort({
+          position: -1,
+        })
         listPosition = lastList ? lastList.position + 1024 : 1024
       }
 
@@ -67,9 +109,12 @@ router.post(
         actor: req.user.id,
         board: boardId,
         list: list._id,
-        description: `added list "${title}"`,
+        description: `created list "${title}"`,
       })
       await activity.save()
+
+      // Populate the list for response
+      await list.populate("cards")
 
       // Emit real-time event
       req.io.to(`board-${boardId}`).emit("list-created", {
@@ -84,7 +129,7 @@ router.post(
       console.error("Create list error:", error)
       res.status(500).json({ message: "Server error" })
     }
-  },
+  }
 )
 
 // Update list
@@ -97,7 +142,6 @@ router.put(
       .trim()
       .isLength({ min: 1, max: 100 })
       .withMessage("Title must be less than 100 characters"),
-    body("position").optional().isNumeric().withMessage("Position must be a number"),
   ],
   async (req, res) => {
     try {
@@ -106,9 +150,7 @@ router.put(
         return res.status(400).json({ errors: errors.array() })
       }
 
-      const { title, position } = req.body
       const list = await List.findById(req.params.id).populate("board")
-
       if (!list) {
         return res.status(404).json({ message: "List not found" })
       }
@@ -116,52 +158,60 @@ router.put(
       // Check access
       const isMember =
         list.board.owner.toString() === req.user.id ||
-        list.board.members.some((member) => member.user.toString() === req.user.id)
+        list.board.members.some(
+          (member) => member.user.toString() === req.user.id
+        )
 
       if (!isMember) {
         return res.status(403).json({ message: "Access denied" })
       }
 
-      const updateFields = {}
-      if (title !== undefined) updateFields.title = title
-      if (position !== undefined) updateFields.position = position
+      // Update list
+      const updates = req.body
+      Object.keys(updates).forEach((key) => {
+        if (updates[key] !== undefined) {
+          list[key] = updates[key]
+        }
+      })
 
-      const updatedList = await List.findByIdAndUpdate(req.params.id, { $set: updateFields }, { new: true })
+      await list.save()
 
       // Log activity
-      if (title && title !== list.title) {
-        const activity = new Activity({
-          type: "list_updated",
-          actor: req.user.id,
-          board: list.board._id,
-          list: list._id,
-          description: `renamed list from "${list.title}" to "${title}"`,
-        })
-        await activity.save()
-      }
+      const activity = new Activity({
+        type: "list_updated",
+        actor: req.user.id,
+        board: list.board._id,
+        list: list._id,
+        description: `updated list "${list.title}"`,
+      })
+      await activity.save()
 
       // Emit real-time event
       req.io.to(`board-${list.board._id}`).emit("list-updated", {
         listId: list._id,
-        updates: updateFields,
+        updates,
         boardId: list.board._id,
         userId: req.user.id,
         userName: req.user.name,
       })
 
-      res.json(updatedList)
+      res.json(list)
     } catch (error) {
       console.error("Update list error:", error)
       res.status(500).json({ message: "Server error" })
     }
-  },
+  }
 )
 
-// Move list (update position)
+// Move list
 router.put(
   "/:id/move",
   auth,
-  [body("position").isNumeric().withMessage("Position is required and must be a number")],
+  [
+    body("position")
+      .isNumeric()
+      .withMessage("Position is required and must be a number"),
+  ],
   async (req, res) => {
     try {
       const errors = validationResult(req)
@@ -179,7 +229,9 @@ router.put(
       // Check access
       const isMember =
         list.board.owner.toString() === req.user.id ||
-        list.board.members.some((member) => member.user.toString() === req.user.id)
+        list.board.members.some(
+          (member) => member.user.toString() === req.user.id
+        )
 
       if (!isMember) {
         return res.status(403).json({ message: "Access denied" })
@@ -212,14 +264,13 @@ router.put(
       console.error("Move list error:", error)
       res.status(500).json({ message: "Server error" })
     }
-  },
+  }
 )
 
 // Archive list
 router.put("/:id/archive", auth, async (req, res) => {
   try {
     const list = await List.findById(req.params.id).populate("board")
-
     if (!list) {
       return res.status(404).json({ message: "List not found" })
     }
@@ -227,7 +278,9 @@ router.put("/:id/archive", auth, async (req, res) => {
     // Check access
     const isMember =
       list.board.owner.toString() === req.user.id ||
-      list.board.members.some((member) => member.user.toString() === req.user.id)
+      list.board.members.some(
+        (member) => member.user.toString() === req.user.id
+      )
 
     if (!isMember) {
       return res.status(403).json({ message: "Access denied" })
@@ -237,7 +290,7 @@ router.put("/:id/archive", auth, async (req, res) => {
     await list.save()
 
     // Archive all cards in the list
-    await Card.updateMany({ list: list._id }, { $set: { archived: true } })
+    await Card.updateMany({ list: list._id }, { archived: true })
 
     // Log activity
     const activity = new Activity({
@@ -252,6 +305,52 @@ router.put("/:id/archive", auth, async (req, res) => {
     res.json({ message: "List archived successfully" })
   } catch (error) {
     console.error("Archive list error:", error)
+    res.status(500).json({ message: "Server error" })
+  }
+})
+
+// Delete list
+router.delete("/:id", auth, async (req, res) => {
+  try {
+    const list = await List.findById(req.params.id).populate("board")
+    if (!list) {
+      return res.status(404).json({ message: "List not found" })
+    }
+
+    // Check access
+    const isMember =
+      list.board.owner.toString() === req.user.id ||
+      list.board.members.some(
+        (member) => member.user.toString() === req.user.id
+      )
+
+    if (!isMember) {
+      return res.status(403).json({ message: "Access denied" })
+    }
+
+    // Delete all cards in the list
+    await Card.deleteMany({ list: list._id })
+
+    // Remove list from board
+    await Board.findByIdAndUpdate(list.board._id, {
+      $pull: { lists: list._id },
+    })
+
+    // Delete the list
+    await List.findByIdAndDelete(req.params.id)
+
+    // Log activity
+    const activity = new Activity({
+      type: "list_deleted",
+      actor: req.user.id,
+      board: list.board._id,
+      description: `deleted list "${list.title}"`,
+    })
+    await activity.save()
+
+    res.json({ message: "List deleted successfully" })
+  } catch (error) {
+    console.error("Delete list error:", error)
     res.status(500).json({ message: "Server error" })
   }
 })

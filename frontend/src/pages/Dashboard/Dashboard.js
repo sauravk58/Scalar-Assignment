@@ -1,8 +1,6 @@
-"use client"
-
-import { useState, useEffect } from "react"
-import { Link } from "react-router-dom"
-import { Plus, Star, Users, Lock, Globe } from "lucide-react"
+import { useState, useEffect, useCallback } from "react"
+import { Link, useNavigate } from "react-router-dom"
+import { Plus, Star, Users, Lock, Globe, ArrowLeft } from "lucide-react"
 import Button from "../../components/UI/Button"
 import LoadingSpinner from "../../components/UI/LoadingSpinner"
 import CreateBoardModal from "../../components/Modals/CreateBoardModal"
@@ -12,39 +10,105 @@ const Dashboard = () => {
   const [boards, setBoards] = useState([])
   const [workspaces, setWorkspaces] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [showCreateBoard, setShowCreateBoard] = useState(false)
   const [showCreateWorkspace, setShowCreateWorkspace] = useState(false)
+  
+  const navigate = useNavigate()
 
-  useEffect(() => {
-    fetchData()
-  }, [])
+  const getApiUrl = () => {
+    const url = process.env.REACT_APP_BACKEND_API_URL || "http://localhost:4000"
+    console.log("Dashboard API URL:", url)
+    return url
+  }
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
+      setLoading(true)
+      setError(null)
+      
       const token = localStorage.getItem("token")
+      
+      // Check if user is authenticated
+      if (!token) {
+        navigate("/login")
+        return
+      }
+      
+      const apiUrl = getApiUrl()
+      console.log("Fetching dashboard data from:", apiUrl)
 
       const [boardsRes, workspacesRes] = await Promise.all([
-        fetch(`${process.env.REACT_APP_BACKEND_API_URL}/api/boards`, {
-          headers: { Authorization: `Bearer ${token}` },
+        fetch(`${apiUrl}/api/boards`, {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
         }),
-        fetch(`${process.env.REACT_APP_BACKEND_API_URL}/api/workspaces`, {
-          headers: { Authorization: `Bearer ${token}` },
+        fetch(`${apiUrl}/api/workspaces`, {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
         }),
       ])
 
-      if (boardsRes.ok && workspacesRes.ok) {
-        const boardsData = await boardsRes.json()
-        const workspacesData = await workspacesRes.json()
+      console.log("API Response status:", {
+        boards: boardsRes.status,
+        workspaces: workspacesRes.status,
+      })
 
-        setBoards(boardsData)
-        setWorkspaces(workspacesData)
+      if (!boardsRes.ok || !workspacesRes.ok) {
+        // Handle authentication errors
+        if (boardsRes.status === 401 || workspacesRes.status === 401) {
+          localStorage.removeItem("token")
+          navigate("/login")
+          return
+        }
+        
+        throw new Error(`Failed to fetch data: Boards ${boardsRes.status}, Workspaces ${workspacesRes.status}`)
       }
+
+      const [boardsData, workspacesData] = await Promise.all([
+        boardsRes.json(),
+        workspacesRes.json(),
+      ])
+
+      console.log("Dashboard data loaded:", {
+        boards: boardsData.length,
+        workspaces: workspacesData.length,
+      })
+
+      setBoards(boardsData)
+      setWorkspaces(workspacesData)
+      
     } catch (error) {
-      console.error("Error fetching data:", error)
+      console.error("Error fetching dashboard data:", error)
+      setError(error.message)
+      
+      // If it's a network error, don't redirect to login
+      if (error.message.includes("fetch")) {
+        setError("Unable to connect to server. Please check your connection.")
+      }
     } finally {
       setLoading(false)
     }
-  }
+  }, [navigate])
+
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  // Refresh data when component mounts (useful for back navigation)
+  useEffect(() => {
+    const handleFocus = () => {
+      console.log("Dashboard focused - refreshing data")
+      fetchData()
+    }
+
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
+  }, [fetchData])
 
   const handleBoardCreated = (newBoard) => {
     setBoards((prev) => [newBoard, ...prev])
@@ -56,8 +120,36 @@ const Dashboard = () => {
     setShowCreateWorkspace(false)
   }
 
+  const handleRetry = () => {
+    setError(null)
+    fetchData()
+  }
+
   if (loading) {
     return <LoadingSpinner text="Loading your boards..." />
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="text-center py-12 bg-white rounded-lg border border-red-200">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <ArrowLeft size={24} className="text-red-600" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Unable to load dashboard</h3>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <div className="flex justify-center space-x-4">
+            <Button onClick={handleRetry}>Try Again</Button>
+            <Button 
+              variant="outline" 
+              onClick={() => navigate("/login")}
+            >
+              Login Again
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -78,6 +170,9 @@ const Dashboard = () => {
           <Plus size={16} className="mr-2" />
           Create Workspace
         </Button>
+        <Button variant="ghost" onClick={fetchData}>
+          Refresh
+        </Button>
       </div>
 
       {/* Workspaces Section */}
@@ -89,14 +184,18 @@ const Dashboard = () => {
               <Link
                 key={workspace._id}
                 to={`/workspace/${workspace._id}`}
-                className="block p-6 bg-white rounded-lg border border-gray-200 hover:border-primary-300 hover:shadow-md transition-all duration-200"
+                className="block p-6 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all duration-200"
               >
                 <div className="flex items-start justify-between mb-3">
-                  <h3 className="text-lg font-medium text-gray-900 truncate">{workspace.name}</h3>
+                  <h3 className="text-lg font-medium text-gray-900 truncate">
+                    {workspace.name}
+                  </h3>
                   <Users size={16} className="text-gray-400 flex-shrink-0 ml-2" />
                 </div>
                 {workspace.description && (
-                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">{workspace.description}</p>
+                  <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                    {workspace.description}
+                  </p>
                 )}
                 <div className="flex items-center justify-between text-sm text-gray-500">
                   <span>{workspace.boards?.length || 0} boards</span>
@@ -139,7 +238,9 @@ const Dashboard = () => {
                   </div>
                 </div>
                 <div className="mt-2 px-1">
-                  <p className="text-sm text-gray-600 truncate">{board.workspace?.name}</p>
+                  <p className="text-sm text-gray-600 truncate">
+                    {board.workspace?.name}
+                  </p>
                 </div>
               </Link>
             ))}

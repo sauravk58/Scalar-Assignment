@@ -1,7 +1,4 @@
-"use client"
-
 import { createContext, useContext, useState, useEffect } from "react"
-import axios from "axios"
 import toast from "react-hot-toast"
 
 const AuthContext = createContext()
@@ -14,35 +11,14 @@ export const useAuth = () => {
   return context
 }
 
-axios.defaults.baseURL = process.env.REACT_APP_BACKEND_API_URL || "http://localhost:4000"
+// Set default API URL
+const getApiUrl = () => {
+  return process.env.REACT_APP_BACKEND_API_URL || "http://localhost:4000"
+}
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
-
-  // Set up axios interceptor for auth token
-  useEffect(() => {
-    const token = localStorage.getItem("token")
-    if (token) {
-      axios.defaults.headers.common["Authorization"] = `Bearer ${token}`
-    }
-
-    // Response interceptor to handle token expiration
-    const responseInterceptor = axios.interceptors.response.use(
-      (response) => response,
-      (error) => {
-        if (error.response?.status === 401) {
-          logout()
-          toast.error("Session expired. Please login again.")
-        }
-        return Promise.reject(error)
-      },
-    )
-
-    return () => {
-      axios.interceptors.response.eject(responseInterceptor)
-    }
-  }, [])
 
   // Check if user is authenticated on app load
   useEffect(() => {
@@ -50,7 +26,9 @@ export const AuthProvider = ({ children }) => {
       const token = localStorage.getItem("token")
       if (token) {
         try {
-          const apiUrl = process.env.REACT_APP_BACKEND_API_URL || "http://localhost:4000"
+          const apiUrl = getApiUrl()
+          console.log("Auth check API URL:", apiUrl)
+
           const response = await fetch(`${apiUrl}/api/auth/me`, {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -62,6 +40,7 @@ export const AuthProvider = ({ children }) => {
             setUser(data.user)
           } else {
             localStorage.removeItem("token")
+            console.log("Auth check failed:", response.status)
           }
         } catch (error) {
           console.error("Auth check failed:", error)
@@ -76,7 +55,9 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      const apiUrl = process.env.REACT_APP_BACKEND_API_URL || "http://localhost:4000"
+      const apiUrl = getApiUrl()
+      console.log("Login API URL:", apiUrl)
+
       const response = await fetch(`${apiUrl}/api/auth/login`, {
         method: "POST",
         headers: {
@@ -90,7 +71,6 @@ export const AuthProvider = ({ children }) => {
       if (response.ok) {
         const { token, user } = data
         localStorage.setItem("token", token)
-        axios.defaults.headers.common["Authorization"] = `Bearer ${token}`
         setUser(user)
         toast.success("Login successful!")
         return { success: true }
@@ -107,7 +87,9 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (name, email, password) => {
     try {
-      const apiUrl = process.env.REACT_APP_BACKEND_API_URL || "http://localhost:4000"
+      const apiUrl = getApiUrl()
+      console.log("Register API URL:", apiUrl)
+
       const response = await fetch(`${apiUrl}/api/auth/register`, {
         method: "POST",
         headers: {
@@ -121,7 +103,6 @@ export const AuthProvider = ({ children }) => {
       if (response.ok) {
         const { token, user } = data
         localStorage.setItem("token", token)
-        axios.defaults.headers.common["Authorization"] = `Bearer ${token}`
         setUser(user)
         toast.success("Registration successful!")
         return { success: true }
@@ -138,7 +119,6 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem("token")
-    delete axios.defaults.headers.common["Authorization"]
     setUser(null)
     toast.success("Logged out successfully")
   }
