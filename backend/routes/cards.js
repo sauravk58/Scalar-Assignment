@@ -254,5 +254,53 @@ router.put(
     }
   },
 )
+router.delete("/:id", auth, async (req, res) => {
+  try {
+    const card = await Card.findById(req.params.id).populate("board list")
+    if (!card) {
+  return res.json({ message: "Card already deleted" })
+}
 
+    // Check access
+    const isMember =
+      card.board.owner.toString() === req.user.id ||
+      card.board.members.some((member) => member.user.toString() === req.user.id)
+
+    if (!isMember) {
+      return res.status(403).json({ message: "Access denied" })
+    }
+
+    // Remove from list
+    await List.findByIdAndUpdate(card.list._id, {
+      $pull: { cards: card._id },
+    })
+
+    // Delete the card
+    await card.deleteOne()
+
+    // Log activity
+    const activity = new Activity({
+      type: "card_deleted",
+      actor: req.user.id,
+      board: card.board._id,
+      card: card._id,
+      description: `deleted card "${card.title}" from "${card.list.title}"`,
+    })
+    await activity.save()
+
+    // Emit real-time event (to update other clients)
+    req.io.to(`board-${card.board._id}`).emit("card-deleted", {
+      cardId: card._id,
+      listId: card.list._id,
+      boardId: card.board._id,
+      userId: req.user.id,
+      userName: req.user.name,
+    })
+
+    res.json({ message: "Card deleted successfully" })
+  } catch (error) {
+    console.error("Delete card error:", error)
+    res.status(500).json({ message: "Server error" })
+  }
+})
 module.exports = router

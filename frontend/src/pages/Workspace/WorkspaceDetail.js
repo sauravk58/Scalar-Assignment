@@ -26,7 +26,8 @@ const WorkspaceDetail = () => {
       const token = localStorage.getItem("token")
 
       // Fetch workspace details
-      const workspaceResponse = await fetch(`${process.env.REACT_APP_BACKEND_API_URL}/api/workspaces/${id}`, {
+      const apiUrl = process.env.REACT_APP_BACKEND_API_URL || "http://localhost:4000"
+      const workspaceResponse = await fetch(`${apiUrl}/api/workspaces/${id}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -40,7 +41,8 @@ const WorkspaceDetail = () => {
       setWorkspace(workspaceData)
 
       // Fetch boards in this workspace
-      const boardsResponse = await fetch(`${process.env.REACT_APP_BACKEND_API_URL}/api/boards?workspace=${id}`, {
+      
+      const boardsResponse = await fetch(`${apiUrl}/api/boards?workspace=${id}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },

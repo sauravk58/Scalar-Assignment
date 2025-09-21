@@ -22,7 +22,7 @@ const server = createServer(app)
 // Socket.io setup
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
+    origin: "*" || process.env.FRONTEND_URL || "http://localhost:3000",
     methods: ["GET", "POST"],
   },
 })
@@ -38,10 +38,7 @@ app.use(
 
 // CORS configuration
 app.use(
-  cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
-    credentials: true,
-  }),
+  cors(),
 )
 
 // Body parsing middleware
@@ -178,6 +175,16 @@ app.get("/api/health", (req, res) => {
   res.json({ status: "OK", timestamp: new Date().toISOString() })
 })
 
+if (process.env.NODE_ENV === "production") {
+  const frontendPath = path.join(__dirname, "..", "frontend", "build")
+  app.use(express.static(frontendPath))
+
+  // Catch-all (let React Router handle other routes)
+  app.get("*", (req, res) => {
+    res.sendFile(path.resolve(frontendPath, "index.html"))
+  })
+}
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack)
@@ -187,10 +194,6 @@ app.use((err, req, res, next) => {
   })
 })
 
-// 404 handler
-app.use("*", (req, res) => {
-  res.status(404).json({ message: "Route not found" })
-})
 
 const PORT = process.env.PORT || 4000
 server.listen(PORT, () => {

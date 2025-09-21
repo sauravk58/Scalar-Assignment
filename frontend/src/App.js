@@ -11,7 +11,9 @@ import LoadingSpinner from "./components/UI/LoadingSpinner"
 import { SocketProvider } from "./contexts/SocketContext"
 import { Toaster } from 'react-hot-toast'
 
+
 // Protected Route component
+
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth()
 
@@ -43,6 +45,7 @@ const PublicRoute = ({ children }) => {
 
 // App Routes component (contains all routing logic)
 const AppRoutes = () => {
+  
   return (
     <Router>
       <div className="min-h-screen bg-gray-50">

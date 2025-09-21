@@ -96,19 +96,27 @@ const KanbanList = ({ list, dragHandleProps, onCardClick, onCardCreated, boardId
       </div>
 
       {/* Cards Container */}
+      <div key={list._id}>
       <Droppable 
         droppableId={String(list._id)} 
         type="card"
         isDropDisabled={false}
+        isCombineEnabled={false}
+        ignoreContainerClipping={false}
         key={listKey} // Force re-render when cards change significantly
       >
         {(provided, snapshot) => (
           <div
             {...provided.droppableProps}
             ref={provided.innerRef}
-            className={`flex-1 p-2 space-y-2 overflow-y-auto min-h-0 ${
+            className={`flex-1 p-2 space-y-2 min-h-0 ${
               snapshot.isDraggingOver ? "bg-blue-50" : ""
             }`}
+            style={{
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              maxHeight: 'calc(100vh - 200px)'
+            }}
           >
             {uniqueCards.map((card, index) => {
               // Additional validation
@@ -147,6 +155,7 @@ const KanbanList = ({ list, dragHandleProps, onCardClick, onCardCreated, boardId
           </div>
         )}
       </Droppable>
+      </div>
 
       {/* Add Card Section */}
       <div className="p-2">

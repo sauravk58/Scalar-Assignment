@@ -7,6 +7,7 @@ import axios from "axios"
 import Button from "../UI/Button"
 import { useSocket } from "../../contexts/SocketContext"
 import toast from "react-hot-toast"
+import api from "../../utils/api"
 
 const CreateListModal = ({ isOpen, onClose, onListCreated, boardId }) => {
   const [title, setTitle] = useState("")
@@ -24,12 +25,23 @@ const CreateListModal = ({ isOpen, onClose, onListCreated, boardId }) => {
     setLoading(true)
 
     try {
-      const response = await axios.post("/lists", {
-        title: title.trim(),
-        boardId,
-      })
+      const token = localStorage.getItem("token")
+      const apiUrl = process.env.REACT_APP_BACKEND_API_URL || "http://localhost:4000"
+      const response = await fetch(
+        `${apiUrl}/api/lists`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ title: title.trim(), boardId }),
+        }
+      
+      
+    )
 
-      const newList = response.data
+      const newList = await response.json()
 
       // Emit real-time event
       emitListCreated(newList, boardId)

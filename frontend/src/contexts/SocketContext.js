@@ -125,6 +125,17 @@ export const SocketProvider = ({ children }) => {
       })
     }
   }
+  const emitCardDeleted = (cardId, listId, boardId) => {
+    if (socket) {
+      socket.emit("card-deleted", {
+        cardId,
+        listId,
+        boardId,
+        userId: user.id,
+        userName: user.name,
+      })
+    }
+  }
 
   // List operations
   const emitListCreated = (list, boardId) => {
@@ -133,7 +144,7 @@ export const SocketProvider = ({ children }) => {
         list,
         boardId,
         userId: user.id,
-        userName: user.name,
+        userName: user?.name,
       })
     }
   }
@@ -206,6 +217,7 @@ export const SocketProvider = ({ children }) => {
     emitCardMoved,
     emitCardUpdated,
     emitCardCreated,
+    emitCardDeleted,
     emitListCreated,
     emitListUpdated,
     emitListMoved,

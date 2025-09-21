@@ -34,7 +34,7 @@ const listSchema = new mongoose.Schema(
   }
 )
 
-// Indexes
+// Indexes for performance
 listSchema.index({ board: 1, position: 1 })
 listSchema.index({ board: 1, archived: 1 })
 
