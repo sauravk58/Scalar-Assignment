@@ -2,6 +2,18 @@
 
 A full-stack Trello-like Kanban application built with the MERN stack, featuring real-time collaboration, drag-and-drop functionality, and comprehensive project management features.
 
+#Demo Video Link
+https://youtu.be/wwNTGvB-AQ8
+
+##Screenshots
+<img width="1240" height="556" alt="image" src="https://github.com/user-attachments/assets/b6e19c5c-09f9-44ba-8056-214d706727e6" />
+<img width="1236" height="552" alt="image" src="https://github.com/user-attachments/assets/36ba34e1-5486-47ff-ae76-f86bcae6b977" />
+<img width="1226" height="548" alt="image" src="https://github.com/user-attachments/assets/64a7b59a-fe93-4b2d-9ad6-c9efd02a0a21" />
+<img width="1225" height="535" alt="image" src="https://github.com/user-attachments/assets/ed9d18b6-04db-4d91-addc-64d582379e1f" />
+<img width="1228" height="547" alt="image" src="https://github.com/user-attachments/assets/f72e63b4-639b-4795-b443-e3a5b7f3de67" />
+<img width="1234" height="546" alt="image" src="https://github.com/user-attachments/assets/57d218e0-46c4-4145-9942-d2ba385c5f23" />
+
+
 ## 🚀 Tech Stack & Rationale
 
 **Frontend:**
@@ -223,19 +235,6 @@ FRONTEND_URL=https://your-frontend-domain.com
 REACT_APP_BACKEND_API_URL=https://your-backend-domain.com/api
 REACT_APP_BACKEND_SOCKET_URL=https://your-backend-domain.com
 \`\`\`
-
-### Deployment Options
-
-**Backend (Choose one):**
-- Railway: `railway deploy`
-- Render: Connect GitHub repo
-- Heroku: `git push heroku main`
-- DigitalOcean App Platform
-
-**Frontend (Choose one):**
-- Vercel: `vercel --prod`
-- Netlify: Connect GitHub repo
-- AWS S3 + CloudFront
 
 ## 🔧 Development
 
