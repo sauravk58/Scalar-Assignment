@@ -32,7 +32,9 @@ const CreateWorkspaceModal = ({ onClose, onWorkspaceCreated }) => {
 
     try {
       const token = localStorage.getItem("token")
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_API_URL}/api/workspaces`, {
+      const apiUrl = process.env.REACT_APP_BACKEND_API_URL || "http://localhost:4000"
+      
+      const response = await fetch(`${apiUrl}/api/workspaces`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

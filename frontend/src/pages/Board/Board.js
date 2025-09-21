@@ -15,9 +15,11 @@ import BoardHeader from "../../components/Board/BoardHeader"
 import ActivitySidebar from "../../components/Board/ActivitySidebar"
 import SearchFilters from "../../components/Board/SearchFilters"
 import toast from "react-hot-toast"
+import { useAuth } from "../../contexts/AuthContext"
 
 const Board = () => {
   const { id: boardId } = useParams()
+  const { user } = useAuth()
   const [board, setBoard] = useState(null)
   const [lists, setLists] = useState([])
   const [loading, setLoading] = useState(true)
@@ -142,6 +144,18 @@ const Board = () => {
     }
   }, [boardId, fetchBoard, leaveBoard])
 
+  const handleCardDeletedEvent = useCallback((cardId, listId) => {
+    // if (data.userId === user?.id) return
+  
+    setLists(prevLists =>
+      prevLists.map(list =>
+        list._id === listId
+          ? { ...list, cards: list.cards.filter(c => c._id !== cardId) }
+          : list
+      )
+    )
+  }, [])
+
   useEffect(() => {
     if (board && socket) {
       joinBoard(boardId)
@@ -150,6 +164,7 @@ const Board = () => {
       socket.on("card-moved", handleCardMovedEvent)
       socket.on("card-created", handleCardCreatedEvent)
       socket.on("card-updated", handleCardUpdatedEvent)
+      socket.on("card-deleted", handleCardDeletedEvent)
       socket.on("list-created", handleListCreatedEvent)
       socket.on("list-updated", handleListUpdatedEvent)
       socket.on("list-moved", handleListMovedEvent)
@@ -159,6 +174,7 @@ const Board = () => {
         socket.off("card-moved", handleCardMovedEvent)
         socket.off("card-created", handleCardCreatedEvent)
         socket.off("card-updated", handleCardUpdatedEvent)
+        socket.off("card-deleted", handleCardDeletedEvent)
         socket.off("list-created", handleListCreatedEvent)
         socket.off("list-updated", handleListUpdatedEvent)
         socket.off("list-moved", handleListMovedEvent)
@@ -249,6 +265,8 @@ const Board = () => {
     if (data.userId === socket?.id) return
 
     setLists((prevLists) => {
+      const exists = prevLists.some(l => String(l._id) === String(data.list._id))
+  if (exists) return prevLists;
       const listWithStringId = {
         ...data.list,
         _id: String(data.list._id),
@@ -537,7 +555,10 @@ const Board = () => {
   }, [])
 
   const handleListCreated = useCallback((newList) => {
+    if (data.userId === user?.id) return
     setLists((prevLists) => {
+      const exists = prevLists.some(l => String(l._id) === String(newList.list._id))
+    if (exists) return prevLists
       const listWithStringId = {
         ...newList,
         _id: String(newList._id),
@@ -586,7 +607,7 @@ const Board = () => {
       {/* Board Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Main Board Area */}
-        <div
+        <div 
           className="flex-1 overflow-x-auto overflow-y-hidden p-4"
           style={{ backgroundColor: board.background || "#0079bf" }}
         >
@@ -660,6 +681,7 @@ const Board = () => {
           isOpen={!!selectedCard}
           onClose={() => setSelectedCard(null)}
           boardId={boardId}
+          onCardDeleted={handleCardDeletedEvent} 
         />
       )}
 

@@ -16,7 +16,7 @@ const CardModal = ({ card, onClose, onCardUpdated, onCardDeleted }) => {
   const [isEditing, setIsEditing] = useState(false)
   const [editingDescription, setEditingDescription] = useState(false)
   
-  const { emitCommentAdded, emitCardUpdated } = useSocket()
+  const { emitCommentAdded, emitCardUpdated, emitCardDeleted  } = useSocket()
   const apiUrl = process.env.REACT_APP_BACKEND_API_URL || "http://localhost:4000"
 
   useEffect(() => {
@@ -120,9 +120,11 @@ const CardModal = ({ card, onClose, onCardUpdated, onCardDeleted }) => {
       })
 
       if (response.ok) {
-        onCardDeleted(card._id)
-        toast.success("Card deleted successfully")
+        onCardDeleted(card._id, card.list)
+        setCardData(null)   // clear modal data
         onClose()
+        emitCardDeleted(card._id, card.list, card.board)
+        toast.success("Card deleted successfully")
       } else {
         const error = await response.json()
         toast.error(error.message || "Failed to delete card")
